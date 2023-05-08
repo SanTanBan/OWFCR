@@ -83,7 +83,9 @@ def Euclidean_Distance_Matrix_Generator(locations_dict, Obstacles_Index_Set,
                 Distance_Dict[(loc1, loc2)] = Distance_Dict[(loc2, loc1)]
             else:
 
-                max_dist = 0
+                lat1, lon1, pow1 = locations_dict[loc1]
+                lat2, lon2, pow2 = locations_dict[loc2]
+                max_dist = sqrt((lat1 - lat2)**2 + (lon1 - lon2)**2)
 
                 for individual_obstacle in Obstacles_Index_Set:
                     if do_lines_intersect(
@@ -94,11 +96,6 @@ def Euclidean_Distance_Matrix_Generator(locations_dict, Obstacles_Index_Set,
                         (Obstacles_Line_End_Lat_Dict[individual_obstacle],
                          Obstacles_Line_End_Lon_Dict[individual_obstacle], 0)):
                         distance = 9999999999999  # Very Large Value
-
-                    else:
-                        lat1, lon1, pow1 = locations_dict[loc1]
-                        lat2, lon2, pow2 = locations_dict[loc2]
-                        distance = sqrt((lat1 - lat2)**2 + (lon1 - lon2)**2)
 
                     if distance > max_dist:
                         max_dist = distance  # max_dist is the maximum distance between two points since the same two points would have the Euclidean distance without an Obstacle and will have the 999999999 distance with another obstacle
@@ -243,17 +240,13 @@ def Intersecting_Arcs_within_Radius(locations_dict, Distance_Matrix,
 
 
 Turbines = pd.read_excel(Excel_Filename, "Turbine Locations", index_col=0)
+
 Substations = pd.read_excel(Excel_Filename,
                             "Substation Locations",
                             index_col=0)
 Steiners = pd.read_excel(Excel_Filename, "Steiner Locations", index_col=0)
 Obstacles = pd.read_excel(Excel_Filename, "Obstacles", index_col=0)
 Cables = pd.read_excel(Excel_Filename, "Cable Specifications", index_col=0)
-
-# print(Turbines)
-# print(Substations)
-# print(Steiners)
-# print(Cables)
 
 Cables_Index_Set = set(Cables.index)
 Cable_Cost_Dict = Cables["Cost"].to_dict()
@@ -321,7 +314,6 @@ Crossing_Radius_Dict = {
     **Substations_Crossing_Radius_Dict,
     **Turbines_Crossing_Radius_Dict
 }
-
 if No_Cross_Constraints == 0:
 
     if Common_No_Cross_Boundary_Radius <= 0:
@@ -345,10 +337,6 @@ prob = LpProblem("OWFCR_Tree_Type_" + str(OWFCR_Type), LpMinimize)
 
 all_connections = [(i, j) for i in All_Nodes_Index_Set
                    for j in All_Nodes_Index_Set if i != j]
-connections = [(i, j) for i in All_Nodes_Index_Set for j in All_Nodes_Index_Set
-               if i != j]
-cables_per_connections = [(i, j, t) for (i, j) in connections
-                          for t in Cables_Index_Set]
 
 
 def zip_coords(df):
@@ -365,10 +353,14 @@ def two_way_conn(conns):
     return [*((i, j) for (i, j) in conns), *((j, i) for (i, j) in conns)]
 
 
-connections = two_way_conn([(indices[a[0]], indices[a[1]])
-                            for a in v.ridge_points.tolist()] +
-                           [(i, j) for i in Turbines.index
-                            for j in substations_steiners if i != j])
+connections = list(
+    set(
+        two_way_conn([(indices[a[0]], indices[a[1]])
+                      for a in v.ridge_points.tolist()] +
+                     [(i, j) for i in indices
+                      for j in substations_steiners if i != j])))
+cables_per_connections = [(i, j, t) for (i, j) in connections
+                          for t in Cables_Index_Set]
 
 # Decision Variables
 
@@ -452,7 +444,8 @@ if No_Cross_Constraints == 0:
         Line1, Line2 = Each_Crossing
         h, k = Line1
         i, j = Line2
-        prob += y[i, j] + y[j, i] + y[h, k] + y[k, h] <= 1
+        if (i, j) in connections and (h, k) in connections:
+            prob += y[i, j] + y[j, i] + y[h, k] + y[k, h] <= 1
 elif No_Cross_Constraints == 1:
     # Equation 14
     for (a, b) in connections:
@@ -469,7 +462,7 @@ if OWFCR_Type == 1:
 # Equation 17 and 18
 if OWFCR_Type == 2:
     for j in Turbines_Index_Set:
-        prob += lpSum(y[i, j] for i in connected(h)) == lpSum(d * z[j, d]
+        prob += lpSum(y[i, j] for i in connected(j)) == lpSum(d * z[j, d]
                                                               for d in D)
 
         prob += lpSum(z[j, d] for d in D) <= 1
@@ -507,7 +500,7 @@ start_time = time()
 
 from multiprocessing import cpu_count
 
-seed = 1666
+seed = 1234567
 status = prob.solve(
     PULP_CBC_CMD(timeLimit=TimeLimit,
                  threads=cpu_count(),
@@ -538,15 +531,13 @@ Cable_Routes_Dict = {}
 for t in Cables_Index_Set:
     routes = []
     Used_Steiner_NodeSet = set()
-    for i in All_Nodes_Index_Set:
-        for j in All_Nodes_Index_Set:
-            if i != j:
-                if value(x[i, j, t]) == 1:
-                    routes.append((i, j))
-                    if i in Steiners_Index_Set:
-                        Used_Steiner_NodeSet.add(i)
-                    elif j in Steiners_Index_Set:
-                        Used_Steiner_NodeSet.add(j)
+    for (i, j) in connections:
+        if value(x[i, j, t]) == 1:
+            routes.append((i, j))
+            if i in Steiners_Index_Set:
+                Used_Steiner_NodeSet.add(i)
+            elif j in Steiners_Index_Set:
+                Used_Steiner_NodeSet.add(j)
 
     All_Used_Steiner_Nodes.union(Used_Steiner_NodeSet)
     Cable_Routes_Dict[t] = routes
