@@ -97,8 +97,8 @@ def Euclidean_Distance_Matrix_Generator(locations_dict, Obstacles_Index_Set,
                          Obstacles_Line_End_Lon_Dict[individual_obstacle], 0)):
                         distance = 9999999999999  # Very Large Value
 
-                    if distance > max_dist:
-                        max_dist = distance  # max_dist is the maximum distance between two points since the same two points would have the Euclidean distance without an Obstacle and will have the 999999999 distance with another obstacle
+                        if distance > max_dist:
+                            max_dist = distance  # max_dist is the maximum distance between two points since the same two points would have the Euclidean distance without an Obstacle and will have the 999999999 distance with another obstacle
 
                 ws.cell(row=i + 2, column=j + 2, value=max_dist)
                 Distance_Dict[(loc1, loc2)] = max_dist
