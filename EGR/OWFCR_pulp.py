@@ -250,7 +250,6 @@ def Intersecting_Arcs_within_Radius(locations_dict, Distance_Matrix,
 
 
 Turbines = pd.read_excel(Excel_Filename, "Turbine Locations", index_col=0)
-Turbines = Turbines.head(15)
 Substations = pd.read_excel(Excel_Filename,
                             "Substation Locations",
                             index_col=0)
@@ -325,6 +324,25 @@ Crossing_Radius_Dict = {
     **Substations_Crossing_Radius_Dict,
     **Turbines_Crossing_Radius_Dict
 }
+
+areas = {}
+areas_style = {
+    "Site Boundary": ("blue", ),
+    "Tender Area": ("red", ),
+    "Cable Corridor": ("green", )
+}
+lat0 = Decisions.get("Latitude", 0)
+lon0 = Decisions.get("Longitude", 0)
+for ar in areas_style:
+    try:
+        areas[ar] = pd.read_excel(Excel_Filename, ar, index_col=0)
+        areas[ar]["Longitude0"] = areas[ar]["Longitude"].copy()
+        areas[ar]["Latitude0"] = areas[ar]["Latitude"].copy()
+        areas[ar]["Longitude"] -= lon0
+        areas[ar]["Latitude"] -= lat0
+    except:
+        pass
+
 if No_Cross_Constraints == 0:
 
     if Common_No_Cross_Boundary_Radius <= 0:
@@ -557,6 +575,17 @@ for t in Cables_Index_Set:
 
 # Plotting the Turbines, Substations, Steiner Nodes and Cable Routes in Single Diagram
 plt.figure(figsize=(13, 13))
+"""
+for ar in areas:
+    (color, ) = areas_style[ar]
+    plt.fill(areas[ar]["Longitude"],
+             areas[ar]["Latitude"],
+             edgecolor=color,
+             fill=False)
+    handle = Line2D([0], [0], color=color, label=ar)
+    handles.extend([handle])
+
+"""
 
 All_Used_Steiner_Nodes = Steiners_Index_Set
 Steiner_Handle = plt.scatter([
@@ -717,6 +746,16 @@ plt.title(name)
 plt.ylabel("Latitude")
 plt.xlabel("Longitude")
 plt.legend(handles=handles)
+
+axes = plt.gca()
+y_min, y_max = axes.get_ylim()
+x_min, x_max = axes.get_xlim()
+y_range = y_max - y_min
+x_range = x_max - x_min
+max_range = max(y_range, x_range)
+plt.ylim(y_min - (max_range - y_range) / 2, y_max + (max_range - y_range) / 2)
+plt.xlim(x_min - (max_range - x_range) / 2, x_max + (max_range - x_range) / 2)
+
 #plt.legend()
 Path("images").mkdir(exist_ok=True)
 name = "images/" + name + ".png"
