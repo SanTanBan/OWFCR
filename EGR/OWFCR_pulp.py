@@ -249,7 +249,7 @@ def Intersecting_Arcs_within_Radius(locations_dict, Distance_Matrix,
 
 
 Turbines = pd.read_excel(Excel_Filename, "Turbine Locations", index_col=0)
-Turbines = Turbines.head(10)
+Turbines = Turbines.head(15)
 Substations = pd.read_excel(Excel_Filename,
                             "Substation Locations",
                             index_col=0)
@@ -584,10 +584,29 @@ Turbine_Handle = plt.scatter([
                              c='r',
                              marker='s',
                              label="Turbines")
+
 handles.extend([Turbine_Handle])
 for i in Turbines_Index_Set:
     plt.text(All_Nodes_DictKey_Lat_Lon_Power_ValueTuple[i][1] + 0.33,
              All_Nodes_DictKey_Lat_Lon_Power_ValueTuple[i][0] + 0.33, i)
+
+# mooring
+
+R1 = 150
+R2 = 550
+angle = 38
+color = "grey"
+n = 3
+
+for y0, x0 in zip_coords(Turbines):
+    for i in range(n):
+        a = math.pi * .5 - math.pi * 2 * i / n - math.radians(angle)
+        x1, y1 = x0 + math.cos(a) * R1, y0 + math.sin(a) * R1
+        x2, y2 = x0 + math.cos(a) * R2, y0 + math.sin(a) * R2
+        plt.plot([x1, x2], [y1, y2], linestyle="dashdot", color=color)
+
+mooring_lines = Line2D([], [], label="Mooring", color=color)
+handles.extend([mooring_lines])
 
 Substation_Handle = plt.scatter([
     All_Nodes_DictKey_Lat_Lon_Power_ValueTuple[i][1]
@@ -666,11 +685,12 @@ for individual_obstacle in Obstacles_Index_Set:
                Obstacles_Line_End_Lon_Dict[individual_obstacle]) / 2
     plt.text(mid_Lon, mid_Lat, individual_obstacle)
 
-line_handle = Line2D([0], [0],
-                     linestyle="dashdot",
-                     label="Obstacles",
-                     color="black")
-handles.extend([line_handle])
+if len(Obstacles_Index_Set):
+    line_handle = Line2D([0], [0],
+                         linestyle="dashdot",
+                         label="Obstacles",
+                         color="black")
+    handles.extend([line_handle])
 
 if No_Cross_Constraints == 0:
     no_cross = " & Eq 10"
@@ -697,7 +717,6 @@ plt.ylabel("Latitude")
 plt.xlabel("Longitude")
 plt.legend(handles=handles)
 #plt.legend()
-plt.show()
 Path("images").mkdir(exist_ok=True)
 name = "images/" + name + ".png"
 plt.savefig(name, format='png', bbox_inches="tight")
