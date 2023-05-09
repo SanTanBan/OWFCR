@@ -1,4 +1,6 @@
+import argparse
 import math
+import sys
 from math import sqrt
 from pathlib import Path
 from time import time
@@ -8,8 +10,8 @@ import numpy as np
 import openpyxl
 import pandas as pd
 from matplotlib.lines import Line2D
-from pulp import (PULP_CBC_CMD, LpMinimize, LpProblem, LpStatus, LpVariable,
-                  lpSum, value)
+from pulp import (CPLEX, PULP_CBC_CMD, LpMinimize, LpProblem, LpStatus,
+                  LpVariable, lpSum, value)
 from scipy.spatial import Voronoi
 
 handles, labels = plt.gca().get_legend_handles_labels()
@@ -19,7 +21,14 @@ colourSet = [
     'olive', 'cyan'
 ]
 
-Excel_Filename = "Dashboard.xlsx"
+argparser = argparse.ArgumentParser()
+argparser.add_argument("--filename", "-f", default="Dashboard.xlsx")
+argparser.add_argument("--solver",
+                       choices=["CPLEX", "PULP_CBC_CMD"],
+                       default="PULP_CBC_CMD")
+args = argparser.parse_args()
+
+Excel_Filename = args.filename
 
 DashBoard = pd.read_excel(Excel_Filename, "DashBoard", index_col=0)
 
@@ -240,7 +249,7 @@ def Intersecting_Arcs_within_Radius(locations_dict, Distance_Matrix,
 
 
 Turbines = pd.read_excel(Excel_Filename, "Turbine Locations", index_col=0)
-
+Turbines = Turbines.head(10)
 Substations = pd.read_excel(Excel_Filename,
                             "Substation Locations",
                             index_col=0)
@@ -286,6 +295,7 @@ Obstacles_Line_End_Lat_Dict = Obstacles["Line End Latitude"].to_dict()
 Obstacles_Line_End_Lon_Dict = Obstacles["Line End Longitude"].to_dict()
 
 All_Nodes_Index_Set = Turbines_Index_Set | Substations_Index_Set | Steiners_Index_Set
+
 All_Nodes_DictKey_Lat_Lon_Power_ValueTuple = {}
 for Single_Node in All_Nodes_Index_Set:
     if Single_Node in Turbines_Index_Set:
@@ -495,16 +505,18 @@ if OWFCR_Type == 4:
     for h in Turbines_Index_Set:
         prob += lpSum(x[i, h, Tao] for i in connected(h)) <= mu_2
 
-# Solve the Problem using default PuLP_CBC settings
 start_time = time()
 
 from multiprocessing import cpu_count
 
-seed = 1234567
-status = prob.solve(
-    PULP_CBC_CMD(timeLimit=TimeLimit,
-                 threads=cpu_count(),
-                 options=[f"RandomS {seed}"]))
+if args.solver == "PULP_CBC_CMD":
+    seed = 1234567
+    status = prob.solve(
+        PULP_CBC_CMD(timeLimit=TimeLimit,
+                     threads=cpu_count(),
+                     options=[f"RandomS {seed}"]))
+if args.solver == "CPLEX":
+    status = prob.solve(CPLEX(timeLimit=TimeLimit, threads=cpu_count()))
 
 end_time = time()
 
@@ -685,6 +697,38 @@ plt.ylabel("Latitude")
 plt.xlabel("Longitude")
 plt.legend(handles=handles)
 #plt.legend()
+plt.show()
 Path("images").mkdir(exist_ok=True)
 name = "images/" + name + ".png"
 plt.savefig(name, format='png', bbox_inches="tight")
+
+w = pd.ExcelWriter("results.xlsx", mode="w")
+
+df = pd.DataFrame(
+    [[i, j] + [value(y[i, j])] + [value(x[i, j, t]) for t in Cables.index]
+     for i in All_Nodes_Index_Set
+     for j in All_Nodes_Index_Set if (i, j) in connections],
+    columns=["In", "Out", "Connected"] + list(Cables.index))
+df.to_excel(w, "Cables0", index=None)
+
+df1 = pd.DataFrame([[i] + [
+    value(f[i, j]) if (i, j) in connections else -1
+    for j in All_Nodes_Index_Set
+] for i in All_Nodes_Index_Set],
+                   columns=["In"] + list(All_Nodes_Index_Set))
+
+df1.to_excel(w, "Connections", index=None)
+
+df2 = pd.DataFrame(
+    [[i, j, t, Distance_Dict[i, j], Distance_Dict[i, j] * Cable_Cost_Dict[t]]
+     for i in All_Nodes_Index_Set
+     for j in All_Nodes_Index_Set if (i, j) in connections
+     for t in Cables.index if value(x[i, j, t]) == 1],
+    columns=["In", "Out", "Type", "Length", "Cost"])
+
+df2.to_excel(w, "Cables", index=None)
+
+df3 = df2.groupby("Type").sum(numeric_only=True)
+df3.to_excel(w, "Cables Summary")
+
+w.close()
