@@ -592,8 +592,8 @@ for i in Turbines_Index_Set:
 
 # mooring
 
-R1 = 150
-R2 = 550
+R1 = int(Decisions.get('Mooring Radius Touchdown point', 150))
+R2 = int(Decisions.get('Mooring Radius Anchor point', 550))
 angle = 38
 color = "grey"
 n = 3
