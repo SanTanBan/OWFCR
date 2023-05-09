@@ -10,7 +10,7 @@ import numpy as np
 import openpyxl
 import pandas as pd
 from matplotlib.lines import Line2D
-from pulp import (CPLEX, PULP_CBC_CMD, LpMinimize, LpProblem, LpStatus,
+from pulp import (CPLEX_CMD, PULP_CBC_CMD, LpMinimize, LpProblem, LpStatus,
                   LpVariable, lpSum, value)
 from scipy.spatial import Voronoi
 
@@ -24,8 +24,9 @@ colourSet = [
 argparser = argparse.ArgumentParser()
 argparser.add_argument("--filename", "-f", default="Dashboard.xlsx")
 argparser.add_argument("--solver",
-                       choices=["CPLEX", "PULP_CBC_CMD"],
-                       default="PULP_CBC_CMD")
+                       "-s",
+                       choices=["CPLEX", "PULP_CBC"],
+                       default="PULP_CBC")
 args = argparser.parse_args()
 
 Excel_Filename = args.filename
@@ -509,14 +510,14 @@ start_time = time()
 
 from multiprocessing import cpu_count
 
-if args.solver == "PULP_CBC_CMD":
+if args.solver == "PULP_CBC":
     seed = 1234567
     status = prob.solve(
         PULP_CBC_CMD(timeLimit=TimeLimit,
                      threads=cpu_count(),
                      options=[f"RandomS {seed}"]))
 if args.solver == "CPLEX":
-    status = prob.solve(CPLEX(timeLimit=TimeLimit, threads=cpu_count()))
+    status = prob.solve(CPLEX_CMD(timeLimit=TimeLimit, threads=cpu_count()))
 
 end_time = time()
 
