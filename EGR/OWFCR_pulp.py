@@ -563,7 +563,7 @@ for t in Cables_Index_Set:
     routes = []
     Used_Steiner_NodeSet = set()
     for (i, j) in connections:
-        if value(x[i, j, t]) == 1:
+        if value(x[i, j, t]) != 0:
             routes.append((i, j))
             if i in Steiners_Index_Set:
                 Used_Steiner_NodeSet.add(i)
@@ -728,7 +728,7 @@ elif No_Cross_Constraints == 1:
     no_cross = " & Eq 14"
 else:
     no_cross = " without no-cross-constraints"
-solver_name = "PuLP_CBC" + no_cross
+solver_name = args.solver + no_cross
 
 model_name = {
     0: "OWFCR",
@@ -764,7 +764,7 @@ plt.savefig(name, format='png', bbox_inches="tight")
 w = pd.ExcelWriter("results.xlsx", mode="w")
 
 df = pd.DataFrame(
-    [[i, j] + [value(y[i, j])] + [value(x[i, j, t]) for t in Cables.index]
+    [[i, j, value(y[i, j])] + [value(x[i, j, t]) for t in Cables.index]
      for i in All_Nodes_Index_Set
      for j in All_Nodes_Index_Set if (i, j) in connections],
     columns=["In", "Out", "Connected"] + list(Cables.index))
@@ -782,7 +782,7 @@ df2 = pd.DataFrame(
     [[i, j, t, Distance_Dict[i, j], Distance_Dict[i, j] * Cable_Cost_Dict[t]]
      for i in All_Nodes_Index_Set
      for j in All_Nodes_Index_Set if (i, j) in connections
-     for t in Cables.index if value(x[i, j, t]) == 1],
+     for t in Cables.index if value(x[i, j, t]) != 0],
     columns=["In", "Out", "Type", "Length", "Cost"])
 
 df2.to_excel(w, "Cables", index=None)
